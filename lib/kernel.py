@@ -32,10 +32,10 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
 
     @property
     def banner (self):
-        banner_ = "%s v%s" % (
+        banner_ = "%s %s" % (
             self.implementation_name, self.implementation_version)
 
-        _logger.debug("banner requested; returned %s" % banner_)
+        _logger.debug("banner requested; returned \"%s\"" % banner_)
         return banner_
 
     @property
@@ -70,7 +70,8 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
             # display the execution results, if wanted
             if (silent):
                 _logger.debug("emitting nothing (silent notebook)")
-            else:
+
+            elif (results is not None):
                 # ensure that the results are a list
                 if (isinstance(results, six.string_types)) or \
                    (not isinstance(results, collections.Iterable)):
@@ -97,7 +98,7 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                             "data": {content_type: content}}
 
                         _logger.debug("emitting data: %s (%d bytes)" % (
-                            content_type, len(content))
+                            content_type, len(content)))
 
                     self.send_response(self.iopub_socket, stream, payload)
 

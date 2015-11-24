@@ -16,8 +16,11 @@ def _ensure_kernel (kernel_class):
         raise ValueError(
             "invalid value for kernel_class (must be a subclass of BaseKernel)")
 
-def install_kernel (kernel_class, user_only = True):
+def install_kernel (kernel_module, kernel_class, user_only = True):
     _ensure_kernel(kernel_class)
+
+    if (kernel_module is None):
+        kernel_module = kernel_class.__module__
 
     kernel_spec_manager = jupyter_client.kernelspec.KernelSpecManager()
 
@@ -30,7 +33,7 @@ def install_kernel (kernel_class, user_only = True):
     kernel_spec = {
         "argv": [
             "python",
-            "-m", kernel_class.__module__,
+            "-m", kernel_module,
             "-f", "{connection_file}"],
         "display_name": kernel_class.implementation_name,
         "language": kernel_class.language_name}
@@ -52,8 +55,13 @@ def install_kernel (kernel_class, user_only = True):
 
     shutil.rmtree(kspec_path)
 
-def launch_kernel (kernel_class):
+def launch_kernel (kernel_class, debug = False):
     _ensure_kernel(kernel_class)
+
+    if (debug):
+        logging.basicConfig(
+            format = "[%(asctime)s] %(levelname)s: %(message)s",
+            level = logging.DEBUG)
 
     _logger.debug("launching kernel %s" % kernel_class)
     ipykernel.kernelapp.IPKernelApp.launch_instance(kernel_class = kernel_class)
