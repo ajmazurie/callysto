@@ -15,12 +15,12 @@ uninstall:
 install:
 	@echo -e "$(BOLD)installing '$(PROJECT_NAME)'$(RESET)"
 	@echo -e -n "$(DIM)"
-	@./setup.py install
+	@python setup.py install
 	@echo -e -n "$(RESET)"
 
 dist:
 	@echo -e "$(BOLD)packaging '$(PROJECT_NAME)'$(RESET)"
-	@./setup.py sdist --formats=zip
+	@python setup.py sdist --formats=zip
 
 clean:
 	@echo -e "$(BOLD)cleaning '$(PROJECT_NAME)' repository$(RESET)"
