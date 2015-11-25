@@ -132,7 +132,7 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
             self.send_response(self.iopub_socket, "stream", {
                 "name": "stderr", "text": "error: interrupted by user"})
 
-        except IOError as exception:
+        except Exception as exception:
             _logger.error("execution aborted due to error: %s" % exception)
             was_successful = False
 

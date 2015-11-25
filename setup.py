@@ -14,6 +14,7 @@ setuptools.setup(
     install_requires = [
         "enum34",
         "html",
+        "inflect",
         "ipykernel",
         "ipywidgets",
         "jupyter_client",
