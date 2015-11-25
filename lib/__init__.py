@@ -1,2 +1,3 @@
 from kernel import *
-from utils import *
+from mimetype import *
+import utils

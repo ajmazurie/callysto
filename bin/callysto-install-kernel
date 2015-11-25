@@ -1,0 +1,104 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+
+import callysto
+import jupyter_client.kernelspec
+
+import argparse
+import importlib
+import inspect
+import json
+import os, sys
+import shutil
+import tempfile
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument("python_class",
+    help = """(mandatory) fully qualified name of a Python class extending
+    callysto.BaseKernel""")
+
+parser.add_argument("--all-users",
+    dest = "user_only", action = "store_false", default = True,
+    help = "(optional) if set, will install the kernel for all users")
+
+options = parser.parse_args()
+
+def error (msg):
+    print("error: %s" % msg, file = sys.stderr)
+    sys.exit(1)
+
+if (options.python_class.count('.') < 1):
+    module_name, class_name = options.python_class, None
+else:
+    module_name, class_name = options.python_class.rsplit('.', 1)
+
+try:
+    kernel_module = importlib.import_module(module_name)
+except ImportError:
+    error("invalid qualified name: module '%s' not found" % module_name)
+
+if (class_name is not None):
+    try:
+        kernel_class = getattr(kernel_module, class_name)
+    except AttributeError:
+        error("invalid qualified name: class '%s' not found" % class_name)
+
+    try:
+        callysto.kernel._validate_kernel(kernel_class)
+    except ValueError:
+        error("invalid class: %s is not a subclass of callysto.BaseKernel" % kernel_class)
+
+else:
+    candidates, kernel_class = inspect.getmembers(kernel_module), None
+
+    while (len(candidates) > 0):
+        _, candidate = candidates.pop(0)
+
+        if (inspect.ismodule(candidate)):
+            candidates.extend(inspect.getmembers(candidate))
+            continue
+
+        if (not inspect.isclass(candidate)):
+            continue
+
+        try:
+            callysto.kernel._validate_kernel(candidate)
+            kernel_class = candidate
+            break
+
+        except AttributeError:
+            continue
+
+    if (kernel_class is None):
+        error("invalid module '%s': no class subclassing callysto.BaseKernel found" % module_name)
+
+kernel_module = inspect.getmodule(kernel_class)
+
+#:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+kernel_spec_manager = jupyter_client.kernelspec.KernelSpecManager()
+
+# create the kernel specifications
+kernel_spec = {
+    "argv": [
+        "python",
+        "-m", kernel_module.__name__,
+        "-f", "{connection_file}"],
+    "display_name": kernel_class.implementation_name,
+    "language": kernel_class.language_name}
+
+kspec_path = tempfile.mkdtemp()
+kspec_fn = os.path.join(kspec_path, "kernel.json")
+
+json.dump(kernel_spec, open(kspec_fn, "w"),
+    indent = 4, sort_keys = True, separators = (',', ': '))
+
+# install the kernel specifications
+kernel_spec_manager.install_kernel_spec(
+    kspec_path,
+    kernel_name = kernel_class.implementation_name,
+    user = options.user_only)
+
+shutil.rmtree(kspec_path)
