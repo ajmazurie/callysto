@@ -12,6 +12,7 @@ setuptools.setup(
         "callysto": "lib"},
     scripts = glob.glob("bin/*"),
     install_requires = [
+        "docopt",
         "enum34",
         "html",
         "inflect",

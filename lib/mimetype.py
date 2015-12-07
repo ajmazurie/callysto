@@ -53,4 +53,7 @@ def _process_content (content_type, content):
 
         return (CONTENT.HTML.value, unicode(html_table))
 
+    if (type(content_type) == CONTENT):
+        content_type = content_type.value
+
     return (content_type, content)
