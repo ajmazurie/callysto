@@ -114,7 +114,7 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                 results = None
             else:
                 try:
-                    results = self.do_execute_(code, allow_stdin)
+                    results = self.do_execute_(code)
                 except Exception:
                     exc_type, exc_value, exc_traceback = sys.exc_info()
                     msg = "error: %s: %s" % (
@@ -223,7 +223,7 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
             "payload": [],  # deprecated
             "user_expressions": {}}
 
-    def do_execute_ (self, code, allow_stdin):
+    def do_execute_ (self, code):
         return
 
 #:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
