@@ -5,7 +5,7 @@ import setuptools
 
 setuptools.setup(
     name = "callysto",
-    version = "0.1b0",
+    version = "0.1b2",
     packages = [
         "callysto"],
     package_dir = {
