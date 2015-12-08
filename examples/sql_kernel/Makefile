@@ -29,3 +29,4 @@ clean:
 	@rm -rf dist
 	@rm -rf **/$(PROJECT_NAME).egg-info
 	@rm -rf $(PROJECT_NAME).egg-info
+	@rm -rf .eggs

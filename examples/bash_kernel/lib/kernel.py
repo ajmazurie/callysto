@@ -39,7 +39,10 @@ class BashKernel (callysto.BaseKernel):
             yield self._bash.run_command(code.strip(), timeout = None)
 
             # retrieve the exit code of the last executed command
-            exit_code = int(self._bash.run_command("echo $?").strip())
+            try:
+                exit_code = int(self._bash.run_command("echo $?").strip())
+            except:
+                exit_code = 1
 
             # if different from zero,
             if (exit_code != 0):
@@ -65,4 +68,4 @@ class BashKernel (callysto.BaseKernel):
             self.do_startup_()
 
 if (__name__ == "__main__"):
-    callysto.launch_kernel(BashKernel)
+    callysto.launch_kernel(BashKernel, debug = True)
