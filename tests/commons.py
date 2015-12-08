@@ -11,7 +11,7 @@ logging.basicConfig(
 import callysto
 
 class DummyKernel (callysto.BaseKernel):
-    def do_execute_ (self, code, allow_stdin):
+    def do_execute_ (self, code):
         return code
 
     def send_response (self, *args):

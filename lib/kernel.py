@@ -117,8 +117,7 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                     results = self.do_execute_(code)
                 except Exception:
                     exc_type, exc_value, exc_traceback = sys.exc_info()
-                    msg = "error: %s: %s" % (
-                        name, exc_type.__name__, exc_value)
+                    msg = "error: %s: %s" % (exc_type.__name__, exc_value)
                     raise ExecutionException(msg), None, exc_traceback
 
                 if (results is not None):

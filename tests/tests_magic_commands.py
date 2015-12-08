@@ -168,7 +168,7 @@ class MagicCommandsTests (unittest.TestCase):
         dummy_kernel = DummyKernel()
         dummy_kernel.magic_commands.prefix = '!' # non-default prefix
 
-        def executor (self, code, allow_stdin):
+        def executor (self, code):
             return list(code.strip())
 
         dummy_kernel.do_execute_ = types.MethodType(executor, dummy_kernel)
