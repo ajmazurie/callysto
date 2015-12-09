@@ -3,6 +3,10 @@ __all__ = (
     "BaseKernel",
     "launch_kernel")
 
+import traceback
+import sys
+import logging
+
 import docopt
 import ipykernel.kernelapp
 import ipykernel.kernelbase
@@ -11,10 +15,6 @@ import ipywidgets
 import magics
 import mimetype
 import utils
-
-import traceback
-import sys
-import logging
 
 _logger = logging.getLogger(__file__)
 
@@ -100,7 +100,7 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                     output = command(code)
                 except Exception:
                     exc_type, exc_value, exc_traceback = sys.exc_info()
-                    msg = "error with pre-flight command '%s': %s: %s" % (
+                    msg = "error with pre-flight command '%s':\n%s: %s" % (
                         name, exc_type.__name__, exc_value)
                     raise PreFlightCommandException(msg), None, exc_traceback
 
@@ -133,7 +133,7 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                     output = command(code, results)
                 except Exception:
                     exc_type, exc_value, exc_traceback = sys.exc_info()
-                    msg = "error with post-flight command '%s': %s: %s" % (
+                    msg = "error with post-flight command '%s':\n%s: %s" % (
                         name, exc_type.__name__, exc_value)
                     raise PostFlightCommandException(msg), None, exc_traceback
 
@@ -175,10 +175,8 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                         content_type, content = mimetype._process_content(
                             content_type, content)
 
-                        _logger.debug("emitting data (%s, %d bytes)" % (
-                            content_type, len(content)))
-
-                        _logger.debug(content)
+                        _logger.debug("emitting data (%s, %d bytes):\n%s" % (
+                            content_type, len(content), content))
 
                         self.send_response(self.iopub_socket,
                             "display_data", {
@@ -204,16 +202,24 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
             if (str(exc_value).strip() == ''):
                 msg += "(no message)"
 
-            _logger.error(msg)
             self.send_response(self.iopub_socket, "stream",
                 {"name": "stderr", "text": msg})
+
+            # create a more detailed error message for the
+            # logger, including the whole stack trace
+            stack, msg_ = traceback.extract_tb(exc_traceback), msg
+            for (file_name, line, func_name, text) in stack:
+                msg_ += "\n%s:%d in %s: %s" % (
+                    file_name, line, func_name, text)
+
+            _logger.error(msg_)
 
             return {
                 "status": "error",
                 "execution_count": self.execution_count,
                 "ename": exc_type.__name__,
                 "evalue": msg,
-                "traceback": traceback.extract_tb(exc_traceback)}
+                "traceback": stack}
 
         # the execution happened without error
         return {

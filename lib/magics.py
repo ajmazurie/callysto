@@ -1,10 +1,10 @@
 
-import utils
-
 import logging
 import re
 
 import docopt
+
+import utils
 
 _logger = logging.getLogger(__file__)
 
@@ -46,6 +46,10 @@ class MagicCommandsManager:
                 kwargs = {}
             else:
                 kwargs = docopt.docopt(doc, args, help = True)
+                # note: we explicitly remove keys without values
+                for key, value in kwargs.items():
+                    if (value is None):
+                        del kwargs[key]
 
             return callback_function(*inputs, **kwargs)
 
