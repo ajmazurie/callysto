@@ -1,10 +1,13 @@
 
 __all__ = ("CONTENT",)
 
+import base64
 import enum
+import logging
+import textwrap
 
-import IPython.display
 import html
+import IPython.display
 
 import utils
 
@@ -14,21 +17,26 @@ class CONTENT (enum.Enum):
     CSV = "text/csv"
     CSV_WITH_HEADER = "text/csv"
     HTML = "text/html"
+    JPEG = "image/jpeg"
     JPG = "image/jpeg"
+    JAVASCRIPT = "application/javascript"
     JS = "application/javascript"
 #   PDF = "application/pdf"
     PNG = "image/png"
     SVG = "image/svg+xml"
 
-def _process_content (content_type, content):
-    # rendering of CSV-formatted table
+_logger = logging.getLogger(__file__)
+
+def _format_content (content_type, content):
+    # formatting of CSV-formatted table
     if (content_type in (CONTENT.CSV, CONTENT.CSV_WITH_HEADER)):
         html_table = html.XHTML().table(style = "border: none")
 
         # write the header, if any
         if (content_type == CONTENT.CSV_WITH_HEADER):
-            table_header = html_table.tr
-            map(lambda x: table_header.th(unicode(x)), content[0])
+            table_header = html_table.tr(style = "border: none")
+            map(lambda x: table_header\
+                .th(unicode(x), style = "border: none"), content[0])
             content = content[1:]
 
         # write the rows
@@ -38,47 +46,38 @@ def _process_content (content_type, content):
                 .td(style = "border: 1px solid #ccc")\
                 .code(unicode(x)), row)
 
-        return (CONTENT.HTML.value, unicode(html_table))
+        return (CONTENT.HTML.value, unicode(html_table), None)
 
-    # rendering of JavaScript code
-    if (content_type == CONTENT.JS):
-        if (isinstance(content, dict)):
-            kwargs = {
-                "data": content.get("code"),
-                "lib": content.get("lib"),
-                }#"css": content.get("css")}
-        else:
-            kwargs = {"data": str(content)}
+    # formatting of JavaScript code
+    if (content_type in (CONTENT.JS, CONTENT.JAVASCRIPT)):
+        code = \
+            "<script type=\"%s\">\n" % CONTENT.JAVASCRIPT.value + \
+            textwrap.dedent(content).strip() + \
+            "\n</script>"
 
-        display_object = IPython.display.Javascript(**kwargs)
-        return (CONTENT.HTML.value,
-            "<script>%s</script>" % display_object._repr_javascript_())
+        return (CONTENT.HTML.value, code, None)
 
-    # rendering of JPEG or PNG pictures
+    # formatting of JPEG or PNG pictures
     if (content_type in (CONTENT.JPG, CONTENT.PNG)):
         if (isinstance(content, dict)):
-            kwargs = {
-                "data": content["data"],
+            data, metadata = content["data"], {
                 "width": content.get("width"),
                 "height": content.get("height")}
         else:
-            kwargs = {"data": content}
+            data, metadata = content, None
 
-        kwargs["format"]  = {
-            CONTENT.JPG: "jpg",
-            CONTENT.PNG: "png"
-            }[content_type]
+        return (content_type.value, base64.b64encode(data), metadata)
 
-        display_object = IPython.display.Image(**kwargs)
-        return (CONTENT.HTML.value, display_object._repr_html_())
-
-    # rendering of SVG picture
+    # formatting of SVG picture
     if (content_type == CONTENT.SVG):
+        # the IPython.display.SVG class does some useful
+        # manipulation of the SVG XML structure when needed
         display_object = IPython.display.SVG(data = content)
-        return (CONTENT.HTML.value, str(display_object))
 
-    # pass-through rendering (will be handled by Jupyter itself)
+        return (CONTENT.SVG.value, display_object._repr_svg_(), None)
+
+    # pass-through formatting (will be handled by Jupyter itself)
     if (type(content_type) == CONTENT):
         content_type = content_type.value
 
-    return (content_type, content)
+    return (content_type, content, None)

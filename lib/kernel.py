@@ -172,15 +172,21 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                     else:
                         # process this content type through IPython.display
                         # and other modules, if a processor is available
-                        content_type, content = mimetype._process_content(
-                            content_type, content)
+                        content_type, content, metadata = \
+                            mimetype._format_content(content_type, content)
 
-                        _logger.debug("emitting data (%s, %d bytes):\n%s" % (
-                            content_type, len(content), content))
+                        _logger.debug(
+                            "emitting data (%s, %d bytes, metadata = %s)" % (
+                                content_type, len(content), metadata))
+
+                        _logger.debug(content)
+
+                        if (metadata is None):
+                            metadata = {}
 
                         self.send_response(self.iopub_socket,
                             "display_data", {
-                                "metadata": {},
+                                "metadata": metadata,
                                 "data": {content_type: content}})
 
         except KeyboardInterrupt:
