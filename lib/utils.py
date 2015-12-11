@@ -17,3 +17,9 @@ def is_iterable (obj):
 
 def is_callable (obj):
     return six.callable(obj)
+
+def flatten_text (text):
+    lines = []
+    for line in text.splitlines():
+        lines.append(line.strip())
+    return ' '.join(lines)

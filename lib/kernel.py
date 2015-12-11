@@ -100,13 +100,13 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                     output = command(code)
                 except Exception:
                     exc_type, exc_value, exc_traceback = sys.exc_info()
-                    msg = "error with pre-flight command '%s':\n%s: %s" % (
+                    msg = "Error in pre-flight command '%s':\n%s: %s" % (
                         name, exc_type.__name__, exc_value)
                     raise PreFlightCommandException(msg), None, exc_traceback
 
                 if (output is not None):
                     assert utils.is_string(output), \
-                        "invalid return value for pre-flight " + \
+                        "Invalid return value for pre-flight " + \
                         "magic command '%s': must be a string" % name
                     code = output
 
@@ -115,17 +115,17 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
             else:
                 try:
                     results = self.do_execute_(code)
+                    if (results is not None):
+                        # ensure that the results are a list
+                        if (utils.is_iterable(results)):
+                            results = list(results)
+                        else:
+                            results = [results]
+
                 except Exception:
                     exc_type, exc_value, exc_traceback = sys.exc_info()
-                    msg = "error: %s: %s" % (exc_type.__name__, exc_value)
+                    msg = "Error while evaluating user command:\n%s: %s" % (exc_type.__name__, exc_value)
                     raise ExecutionException(msg), None, exc_traceback
-
-                if (results is not None):
-                    # ensure that the results are a list
-                    if (utils.is_iterable(results)):
-                        results = list(results)
-                    else:
-                        results = [results]
 
             # execute post-flight magic commands, if any
             for (name, command) in post_flight_commands:
@@ -133,13 +133,13 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                     output = command(code, results)
                 except Exception:
                     exc_type, exc_value, exc_traceback = sys.exc_info()
-                    msg = "error with post-flight command '%s':\n%s: %s" % (
+                    msg = "Error in post-flight command '%s':\n%s: %s" % (
                         name, exc_type.__name__, exc_value)
                     raise PostFlightCommandException(msg), None, exc_traceback
 
                 if (output is not None):
                     assert utils.is_iterable(output), \
-                        "invalid return value for post-flight " + \
+                        "Invalid return value for post-flight " + \
                         "magic command '%s': must be an iterable" % name
                     results = output
 
@@ -190,7 +190,7 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                                 "data": {content_type: content}})
 
         except KeyboardInterrupt:
-            msg = "execution aborted by user"
+            msg = "Execution aborted by user"
 
             _logger.error(msg)
             self.send_response(self.iopub_socket, "stream",
@@ -243,7 +243,7 @@ def _validate_kernel (kernel_class):
     if (not issubclass(kernel_class, BaseKernel)) or \
        (kernel_class == BaseKernel):
         raise ValueError(
-            "invalid value for kernel_class (must be a subclass of BaseKernel)")
+            "Invalid value for kernel_class (must be a subclass of BaseKernel)")
 
 def launch_kernel (kernel_class, debug = False):
     _validate_kernel(kernel_class)
