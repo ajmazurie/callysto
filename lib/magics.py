@@ -1,4 +1,5 @@
 
+import functools
 import logging
 import re
 
@@ -50,10 +51,21 @@ class MagicCommandsManager:
                 for key, value in kwargs.items():
                     if (value is None):
                         del kwargs[key]
+                    else:
+                        kwargs[key] = value.strip().strip('"').strip("'")
+
+            _logger.debug(
+                "executing %s-flight command '%s' (callback function: %s)" % (
+                    "pre" if is_pre_flight else "post",
+                    name.lower(), callback_function))
 
             return callback_function(*inputs, **kwargs)
 
         self._magic_commands[name.lower()] = (_wrapper, is_pre_flight)
+
+        _logger.debug("added %s-flight command '%s' (callback function: %s)" % (
+            "pre" if is_pre_flight else "post",
+            name.lower(), callback_function))
 
     def declare_pre_flight_command (self,
         name, callback_function, doc = None, overwrite = False):
@@ -77,6 +89,8 @@ class MagicCommandsManager:
         return (name.lower() in self._magic_commands)
 
     def remove_command (self, name):
+        if (not self.has_command(name)):
+            raise ValueError("magic command not found: %s" % name)
         del self._magic_commands[name.lower()]
 
     def parse_code (self, code):
@@ -96,10 +110,11 @@ class MagicCommandsManager:
 
                 if (is_pre_flight):
                     pre_flight_commands.append((name,
-                        lambda code: command(args, code)))
+                        functools.partial(command, args)))#lambda code: command(args, code)))
+                    _logger.debug("%s %s" % (command, pre_flight_commands[-1]))
                 else:
                     post_flight_commands.append((name,
-                        lambda code, results: command(args, code, results)))
+                        functools.partial(command, args)))#lambda code, results: command(args, code, results)))
             else:
                 code_.append(line)
 

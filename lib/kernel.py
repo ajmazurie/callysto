@@ -92,10 +92,11 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                (len(post_flight_commands) == 0):
                 return
 
-            _logger.debug("executing:\n%s" % code)
-
             # execute pre-flight magic commands, if any
             for (name, command) in pre_flight_commands:
+                _logger.debug(
+                    "executing pre-flight command wrapper for '%s'" % name)
+                _logger.debug(str(command))
                 try:
                     output = command(code)
                 except Exception:
@@ -113,6 +114,7 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
             if (code.strip() == ''):
                 results = None
             else:
+                _logger.debug("executing:\n%s" % code)
                 try:
                     results = self.do_execute_(code)
                     if (results is not None):
@@ -129,6 +131,8 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
 
             # execute post-flight magic commands, if any
             for (name, command) in post_flight_commands:
+                _logger.debug(
+                    "executing post-flight command wrapper for '%s'" % name)
                 try:
                     output = command(code, results)
                 except Exception:

@@ -1,9 +1,8 @@
 
-from commons import *
-
 import operator
-import types
 import unittest
+
+from commons import *
 
 class MagicCommandsTests (unittest.TestCase):
 
@@ -16,6 +15,7 @@ class MagicCommandsTests (unittest.TestCase):
     def test_adding_magic_command (self):
         dummy_kernel = DummyKernel()
 
+        # we can add pre- and post-flight magic commands
         dummy_kernel.magic_commands.declare_pre_flight_command(
             "pre-flight", lambda x: None)
         self.assertTrue(
@@ -26,6 +26,23 @@ class MagicCommandsTests (unittest.TestCase):
         self.assertTrue(
             dummy_kernel.magic_commands.has_command("post-flight"))
 
+        # we shouldn't be able to add a magic command twice by default,
+        with self.assertRaises(Exception):
+            dummy_kernel.magic_commands.declare_pre_flight_command(
+                "pre-flight", lambda x: None)
+
+        with self.assertRaises(Exception):
+            dummy_kernel.magic_commands.declare_post_flight_command(
+                "post-flight", lambda x: None)
+
+        # except if we use the 'overwrite' parameter
+        dummy_kernel.magic_commands.declare_pre_flight_command(
+            "pre-flight", lambda x: None, overwrite = True)
+
+        dummy_kernel.magic_commands.declare_post_flight_command(
+            "post-flight", lambda x: None, overwrite = True)
+
+        # we can remove existing magic commands,
         dummy_kernel.magic_commands.remove_command("pre-flight")
         self.assertFalse(
             dummy_kernel.magic_commands.has_command("pre-flight"))
@@ -34,16 +51,25 @@ class MagicCommandsTests (unittest.TestCase):
         self.assertFalse(
             dummy_kernel.magic_commands.has_command("post-flight"))
 
+        # but not twice
+        with self.assertRaises(ValueError):
+            dummy_kernel.magic_commands.remove_command("pre-flight")
+
+        with self.assertRaises(ValueError):
+            dummy_kernel.magic_commands.remove_command("post-flight")
+
     def test_pre_flight_commands (self):
         dummy_kernel = DummyKernel()
         dummy_kernel.magic_commands.prefix = '!' # non-default prefix
 
-        class PreFlight:
-            was_run = False
+        class PreFlightCommands:
+            command_1_was_run = False
+            command_2_was_run = False
+            command_3_was_run = False
 
             # command without parameter
             def command_1 (self, code):
-                self.was_run = True
+                self.command_1_was_run = True
                 return code.upper()
 
             # command with parameter
@@ -57,7 +83,7 @@ class MagicCommandsTests (unittest.TestCase):
                         --prefix STRING  Prefix [default: (]
                         --suffix STRING  Suffix [default: )]
                 """
-                self.was_run = True
+                self.command_2_was_run = True
                 prefix = kwargs["--prefix"]
                 suffix = kwargs["--suffix"]
 
@@ -65,9 +91,10 @@ class MagicCommandsTests (unittest.TestCase):
 
             # command throwing an exception
             def command_3 (self, code):
+                self.command_3_was_run = True
                 raise Exception("dummy_error")
 
-        pre_flight = PreFlight()
+        pre_flight = PreFlightCommands()
 
         dummy_kernel.magic_commands.declare_pre_flight_command(
             "pre-flight-1", pre_flight.command_1)
@@ -78,24 +105,30 @@ class MagicCommandsTests (unittest.TestCase):
         dummy_kernel.magic_commands.declare_pre_flight_command(
             "pre-flight-3", pre_flight.command_3)
 
-        # without the magic command
+        # without magic commands being mentioned,
         code = "test"
+
         pre_flight_commands, post_flight_commands, code_ = \
             dummy_kernel.magic_commands.parse_code(code)
 
+        # - none of the magic commands should appear after parsing
         self.assertEqual(len(pre_flight_commands), 0)
         self.assertEqual(len(post_flight_commands), 0)
 
-        status_message, results = execute_code(dummy_kernel, code)
+        # - the code should run without error
+        assertSuccessfulRun(self, dummy_kernel, code, [code])
 
-        self.assertFalse(pre_flight.was_run)
-        pre_flight.was_run = False
+        # - and none of the magic commands should have run
+        self.assertFalse(pre_flight.command_1_was_run)
+        pre_flight.command_1_was_run = False
 
-        self.assertEqual(status_message["status"], "ok")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0][2]["text"], code)
+        self.assertFalse(pre_flight.command_2_was_run)
+        pre_flight.command_2_was_run = False
 
-        # with the magic command
+        self.assertFalse(pre_flight.command_3_was_run)
+        pre_flight.command_3_was_run = False
+
+        # with a magic command being mentioned however,
         code = """
             !pre-flight-1
             test
@@ -104,81 +137,136 @@ class MagicCommandsTests (unittest.TestCase):
         pre_flight_commands, post_flight_commands, code_ = \
             dummy_kernel.magic_commands.parse_code(code)
 
+        # - this magic command should be mentioned
         self.assertEqual(len(pre_flight_commands), 1)
         self.assertEqual(len(post_flight_commands), 0)
-
         self.assertEqual(pre_flight_commands[0][0], "pre-flight-1")
 
-        status_message, results = execute_code(dummy_kernel, code)
+        # - the code should run without error
+        assertSuccessfulRun(self, dummy_kernel, code, ["\nTEST"])
 
-        self.assertTrue(pre_flight.was_run)
-        pre_flight.was_run = False
+        # - the magic command referenced should have run
+        self.assertTrue(pre_flight.command_1_was_run)
+        pre_flight.command_1_was_run = False
 
-        self.assertEqual(status_message["status"], "ok")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0][2]["text"], "\nTEST")
+        self.assertFalse(pre_flight.command_2_was_run)
+        pre_flight.command_2_was_run = False
 
-        # after removing the magic command
+        self.assertFalse(pre_flight.command_3_was_run)
+        pre_flight.command_3_was_run = False
+
+        # after removing the magic command,
         dummy_kernel.magic_commands.remove_command("pre-flight-1")
 
-        # ... any code referring to it should fail
-        status_message, results = execute_code(dummy_kernel, code)
+        # - any code referring to it should fail
+        assertUnsuccessfulRun(self, dummy_kernel, code, [None])
 
-        self.assertEqual(status_message["status"], "error")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0][2]["name"], "stderr")
+        # - the magic command referenced should not have run
+        self.assertFalse(pre_flight.command_1_was_run)
+        pre_flight.command_1_was_run = False
 
-        # ... but not code not referring to it
-        status_message, results = execute_code(dummy_kernel, "test")
+        self.assertFalse(pre_flight.command_2_was_run)
+        pre_flight.command_2_was_run = False
 
-        self.assertEqual(status_message["status"], "ok")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0][2]["text"], "test")
+        self.assertFalse(pre_flight.command_3_was_run)
+        pre_flight.command_3_was_run = False
 
-        # with the parameterized magic command
+        # - any code not referring to it should run
+        assertSuccessfulRun(self, dummy_kernel, "test", ["test"])
+
+        # with a parameterized magic command,
         code = """
             !pre-flight-2 --prefix [
             test
             """
 
-        status_message, results = execute_code(dummy_kernel, code)
+        pre_flight_commands, post_flight_commands, code_ = \
+            dummy_kernel.magic_commands.parse_code(code)
 
-        self.assertTrue(pre_flight.was_run)
-        pre_flight.was_run = False
+        # - this magic command should be mentioned
+        self.assertEqual(len(pre_flight_commands), 1)
+        self.assertEqual(len(post_flight_commands), 0)
+        self.assertEqual(pre_flight_commands[0][0], "pre-flight-2")
 
-        self.assertEqual(status_message["status"], "ok")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0][2]["text"], "[\ntest)")
+        # - the code should run without error
+        assertSuccessfulRun(self, dummy_kernel, code, ["[\ntest)"])
 
-        # with the exception-raising command
+        # - the magic command referenced should have run
+        self.assertFalse(pre_flight.command_1_was_run)
+        pre_flight.command_1_was_run = False
+
+        self.assertTrue(pre_flight.command_2_was_run)
+        pre_flight.command_2_was_run = False
+
+        self.assertFalse(pre_flight.command_3_was_run)
+        pre_flight.command_3_was_run = False
+
+        # with the exception-raising command,
         code = """
             !pre-flight-3
             test
             """
 
-        status_message, results = execute_code(dummy_kernel, code)
+        # - the code should not run
+        assertUnsuccessfulRun(self, dummy_kernel, code, [None])
 
-        self.assertFalse(pre_flight.was_run)
-        pre_flight.was_run = False
+        # - the magic command referenced should have run
+        self.assertFalse(pre_flight.command_1_was_run)
+        pre_flight.command_1_was_run = False
 
-        self.assertEqual(status_message["status"], "error")
-        self.assertTrue(status_message["evalue"].endswith("dummy_error"))
+        self.assertFalse(pre_flight.command_2_was_run)
+        pre_flight.command_2_was_run = False
+
+        self.assertTrue(pre_flight.command_3_was_run)
+        pre_flight.command_3_was_run = False
+
+        # if we combine several magic commands,
+        code = """
+            !pre-flight-1
+            !pre-flight-2 --suffix ]
+            test
+            """
+
+        dummy_kernel.magic_commands.declare_pre_flight_command(
+            "pre-flight-1", pre_flight.command_1)
+
+        pre_flight_commands, post_flight_commands, code_ = \
+            dummy_kernel.magic_commands.parse_code(code)
+
+        # - all these magic commands should be mentioned
+        self.assertEqual(len(pre_flight_commands), 2)
+        self.assertEqual(len(post_flight_commands), 0)
+        self.assertEqual(pre_flight_commands[0][0], "pre-flight-1")
+        self.assertEqual(pre_flight_commands[1][0], "pre-flight-2")
+
+        # - the code should run without error
+        assertSuccessfulRun(self, dummy_kernel, code, ["(\nTEST]"])
+
+        # - the magic commands referenced should have run
+        self.assertTrue(pre_flight.command_1_was_run)
+        pre_flight.command_1_was_run = False
+
+        self.assertTrue(pre_flight.command_2_was_run)
+        pre_flight.command_2_was_run = False
+
+        self.assertFalse(pre_flight.command_3_was_run)
+        pre_flight.command_3_was_run = False
 
     def test_post_flight_commands (self):
         dummy_kernel = DummyKernel()
         dummy_kernel.magic_commands.prefix = '!' # non-default prefix
 
-        def executor (self, code):
-            return list(code.strip())
+        # dummy executor, which split a string into characters
+        dummy_kernel.update_executor(lambda self, code: list(code.strip()))
 
-        dummy_kernel.do_execute_ = types.MethodType(executor, dummy_kernel)
-
-        class PostFlight:
-            was_run = False
+        class PostFlightCommands:
+            command_1_was_run = False
+            command_2_was_run = False
+            command_3_was_run = False
 
             # command without parameters
             def command_1 (self, code, results):
-                self.was_run = True
+                self.command_1_was_run = True
                 return reversed(results)
 
             # command with parameters
@@ -192,7 +280,7 @@ class MagicCommandsTests (unittest.TestCase):
                         --prefix STRING  Prefix [default: (]
                         --suffix STRING  Suffix [default: )]
                 """
-                self.was_run = True
+                self.command_2_was_run = True
                 prefix = kwargs["--prefix"]
                 suffix = kwargs["--suffix"]
 
@@ -200,9 +288,10 @@ class MagicCommandsTests (unittest.TestCase):
 
             # command throwing an exception
             def command_3 (self, code, results):
+                self.command_3_was_run = True
                 raise Exception("dummy_error")
 
-        post_flight = PostFlight()
+        post_flight = PostFlightCommands()
 
         dummy_kernel.magic_commands.declare_post_flight_command(
             "post-flight-1", post_flight.command_1)
@@ -213,27 +302,31 @@ class MagicCommandsTests (unittest.TestCase):
         dummy_kernel.magic_commands.declare_post_flight_command(
             "post-flight-3", post_flight.command_3)
 
-        # without the magic command
+        # without magic command being mentioned,0
         code = "test"
+
         pre_flight_commands, post_flight_commands, code_ = \
             dummy_kernel.magic_commands.parse_code(code)
 
+        # - none of the magic commands should appear after parsing
         self.assertEqual(len(pre_flight_commands), 0)
         self.assertEqual(len(post_flight_commands), 0)
 
-        status_message, results = execute_code(dummy_kernel, code)
-
-        self.assertFalse(post_flight.was_run)
-        post_flight.was_run = False
-
-        self.assertEqual(status_message["status"], "ok")
-        self.assertEqual(len(results), 4)
-        self.assertEqual(
-            map(operator.itemgetter("text"),
-            map(operator.itemgetter(2), results)),
+        # - the code should run without error
+        assertSuccessfulRun(self, dummy_kernel, code,
             ["t", "e", "s", "t"])
 
-        # with the magic command
+        # - and none of the magic commands should have run
+        self.assertFalse(post_flight.command_1_was_run)
+        post_flight.command_1_was_run = False
+
+        self.assertFalse(post_flight.command_2_was_run)
+        post_flight.command_2_was_run = False
+
+        self.assertFalse(post_flight.command_3_was_run)
+        post_flight.command_3_was_run = False
+
+        # with a magic command being mentioned however,
         code = """
             !post-flight-1
             test
@@ -242,83 +335,124 @@ class MagicCommandsTests (unittest.TestCase):
         pre_flight_commands, post_flight_commands, code_ = \
             dummy_kernel.magic_commands.parse_code(code)
 
-        self.assertFalse(post_flight.was_run)
-        post_flight.was_run = False
-
+        # - this magic command should be mentioned
         self.assertEqual(len(pre_flight_commands), 0)
         self.assertEqual(len(post_flight_commands), 1)
-
         self.assertEqual(post_flight_commands[0][0], "post-flight-1")
 
-        status_message, results = execute_code(dummy_kernel, code)
-
-        self.assertTrue(post_flight.was_run)
-        post_flight.was_run = False
-
-        self.assertEqual(status_message["status"], "ok")
-        self.assertEqual(len(results), 4)
-        self.assertEqual(
-            map(operator.itemgetter("text"),
-            map(operator.itemgetter(2), results)),
+        # - the code should run without error
+        assertSuccessfulRun(self, dummy_kernel, code,
             ["t", "s", "e", "t"])
 
-        # after removing the magic command
+        # - the magic command referenced should have run
+        self.assertTrue(post_flight.command_1_was_run)
+        post_flight.command_1_was_run = False
+
+        self.assertFalse(post_flight.command_2_was_run)
+        post_flight.command_2_was_run = False
+
+        self.assertFalse(post_flight.command_3_was_run)
+        post_flight.command_3_was_run = False
+
+        # after removing the magic command,
         dummy_kernel.magic_commands.remove_command("post-flight-1")
 
-        # ... any code referring to it should fail
-        status_message, results = execute_code(dummy_kernel, code)
+        # - any code referring to it should fail
+        assertUnsuccessfulRun(self, dummy_kernel, code, [None])
 
-        self.assertFalse(post_flight.was_run)
-        post_flight.was_run = False
+        # - the magic command referenced should not have run
+        self.assertFalse(post_flight.command_1_was_run)
+        post_flight.command_1_was_run = False
 
-        self.assertEqual(status_message["status"], "error")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0][2]["name"], "stderr")
+        self.assertFalse(post_flight.command_2_was_run)
+        post_flight.command_2_was_run = False
 
-        # ... but not code not referring to it
-        status_message, results = execute_code(dummy_kernel, "test")
+        self.assertFalse(post_flight.command_3_was_run)
+        post_flight.command_3_was_run = False
 
-        self.assertFalse(post_flight.was_run)
-        post_flight.was_run = False
-
-        self.assertEqual(status_message["status"], "ok")
-        self.assertEqual(len(results), 4)
-        self.assertEqual(
-            map(operator.itemgetter("text"),
-            map(operator.itemgetter(2), results)),
+        # - any code not referring to it should run
+        assertSuccessfulRun(self, dummy_kernel, "test",
             ["t", "e", "s", "t"])
 
-        # with the parameterized magic command
+        # with a parameterized magic command,
         code = """
             !post-flight-2 --prefix [
             test
             """
 
-        status_message, results = execute_code(dummy_kernel, code)
+        pre_flight_commands, post_flight_commands, code_ = \
+            dummy_kernel.magic_commands.parse_code(code)
 
-        self.assertTrue(post_flight.was_run)
-        post_flight.was_run = False
+        # - this magic command should be mentioned
+        self.assertEqual(len(pre_flight_commands), 0)
+        self.assertEqual(len(post_flight_commands), 1)
+        self.assertEqual(post_flight_commands[0][0], "post-flight-2")
 
-        self.assertEqual(status_message["status"], "ok")
-        self.assertEqual(len(results), 4)
-        self.assertEqual(
-            map(operator.itemgetter("text"),
-            map(operator.itemgetter(2), results)),
+        # - the code should run without error
+        assertSuccessfulRun(self, dummy_kernel, code,
             ["[t)", "[e)", "[s)", "[t)"])
 
-        # with the exception-raising command
+        # - the magic command referenced should have run
+        self.assertFalse(post_flight.command_1_was_run)
+        post_flight.command_1_was_run = False
+
+        self.assertTrue(post_flight.command_2_was_run)
+        post_flight.command_2_was_run = False
+
+        self.assertFalse(post_flight.command_3_was_run)
+        post_flight.command_3_was_run = False
+
+        # with the exception-raising command,
         code = """
             !post-flight-3
             test
             """
 
-        status_message, results = execute_code(dummy_kernel, code)
+        # - the code should not run
+        assertUnsuccessfulRun(self, dummy_kernel, code, [None])
 
-        self.assertFalse(post_flight.was_run)
-        post_flight.was_run = False
+        # - the magic command referenced should have run
+        self.assertFalse(post_flight.command_1_was_run)
+        post_flight.command_1_was_run = False
 
-        self.assertEqual(status_message["status"], "error")
-        self.assertTrue(status_message["evalue"].endswith("dummy_error"))
+        self.assertFalse(post_flight.command_2_was_run)
+        post_flight.command_2_was_run = False
+
+        self.assertTrue(post_flight.command_3_was_run)
+        post_flight.command_3_was_run = False
+
+        # if we combine several magic commands,
+        code = """
+            !post-flight-1
+            !post-flight-2 --suffix ]
+            test
+            """
+
+        dummy_kernel.magic_commands.declare_post_flight_command(
+            "post-flight-1", post_flight.command_1)
+
+        post_flight_commands, post_flight_commands, code_ = \
+            dummy_kernel.magic_commands.parse_code(code)
+
+        # - all these magic commands should be mentioned
+        self.assertEqual(len(pre_flight_commands), 0)
+        self.assertEqual(len(post_flight_commands), 2)
+        self.assertEqual(post_flight_commands[0][0], "post-flight-1")
+        self.assertEqual(post_flight_commands[1][0], "post-flight-2")
+
+        # - the code should run without error
+        assertSuccessfulRun(self, dummy_kernel, code,
+            ["(t]", "(s]", "(e]", "(t]"])
+
+        # - the magic commands referenced should have run
+        self.assertTrue(post_flight.command_1_was_run)
+        post_flight.command_1_was_run = False
+
+        self.assertTrue(post_flight.command_2_was_run)
+        post_flight.command_2_was_run = False
+
+        self.assertFalse(post_flight.command_3_was_run)
+        post_flight.command_3_was_run = False
 
 if (__name__ == "__main__"):
     unittest.main()

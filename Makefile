@@ -6,19 +6,19 @@ BOLD := \033[1m
 DIM := \033[2m
 RESET := \033[0m
 
-all: uninstall install clean test
+all: test
 
 uninstall:
 	@echo -e "$(BOLD)uninstalling '$(PROJECT_NAME)'$(RESET)"
 	-@pip uninstall -y $(PROJECT_NAME) 2> /dev/null
 
-install:
+install: clean
 	@echo -e "$(BOLD)installing '$(PROJECT_NAME)'$(RESET)"
 	@echo -e -n "$(DIM)"
 	@python setup.py install
 	@echo -e -n "$(RESET)"
 
-test:
+test: uninstall install
 	@echo -e "$(BOLD)running test units for '$(PROJECT_NAME)'$(RESET)"
 	@python -m unittest discover \
 		-s tests -p 'tests_*.py' \
