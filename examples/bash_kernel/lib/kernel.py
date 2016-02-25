@@ -7,11 +7,12 @@ import logging
 import re
 import signal
 
-from pexpect import replwrap, EOF
+import pexpect.replwrap
+from pexpect import EOF
 
 import callysto
 
-_logger = logging.getLogger(__file__)
+_logger = logging.getLogger(__name__)
 
 class BashKernel (callysto.BaseKernel):
     implementation_name = "Bash Kernel"
@@ -27,7 +28,7 @@ class BashKernel (callysto.BaseKernel):
         # to do it now since we won't be able to do it from the child process
         previous_handler = signal.signal(signal.SIGINT, signal.SIG_DFL)
         try:
-            self._bash = replwrap.bash()
+            self._bash = pexpect.replwrap.bash()
         finally:
             # then we set it back to its original value
             signal.signal(signal.SIGINT, previous_handler)
@@ -48,11 +49,13 @@ class BashKernel (callysto.BaseKernel):
             if (exit_code != 0):
                 # send whatever text the process sent
                 # so far to the Jupyter notebook
-                yield self._bash.child.before
+                content = self._bash.child.before
+                if (content.strip() != str(exit_code)):
+                    yield content
 
                 # then raise an exception
                 raise Exception(
-                    "process returned a non-zero exit code: %d" % exit_code)
+                    "Process returned a non-zero exit code: %d" % exit_code)
 
         except KeyboardInterrupt as exception:
             # if the user used a keyboard interrupt, we
@@ -68,4 +71,4 @@ class BashKernel (callysto.BaseKernel):
             self.do_startup_()
 
 if (__name__ == "__main__"):
-    callysto.launch_kernel(BashKernel, debug = True)
+    BashKernel.launch(debug = True)

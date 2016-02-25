@@ -1,31 +1,29 @@
 
 __all__ = (
-    "BaseKernel",
-    "launch_kernel")
+    "BaseKernel",)
 
-import traceback
-import sys
+import inspect
+import json
 import logging
+import logging.config
+import os
+import shutil
+import sys
+import tempfile
+import traceback
 
 import docopt
+import future.utils
 import ipykernel.kernelapp
 import ipykernel.kernelbase
 import ipywidgets
+import jupyter_client.kernelspec
 
 import magics
-import mimetype
+import renderers.core
 import utils
 
-_logger = logging.getLogger(__file__)
-
-class ExecutionException (Exception):
-    pass
-
-class PreFlightCommandException (magics.MagicCommandException):
-    pass
-
-class PostFlightCommandException (magics.MagicCommandException):
-    pass
+_logger = logging.getLogger(__name__)
 
 class BaseKernel (ipykernel.kernelbase.Kernel):
     implementation_name = "KERNEL_IMPLEMENTATION_NAME_PLACEHOLDER"
@@ -62,9 +60,19 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
         _logger.debug("initializing kernel instance %s" % self)
         ipykernel.kernelbase.Kernel.__init__(self, **kwargs)
 
+        # expose shortcuts to the magic commands and renderers API
         self.magic_commands = magics.MagicCommandsManager()
-        self.do_startup_(**kwargs)
 
+        self.declare_pre_flight_command = \
+            self.magic_commands.declare_pre_flight_command
+
+        self.declare_post_flight_command = \
+            self.magic_commands.declare_post_flight_command
+
+        self.register_renderer = renderers.core.register_renderer
+        self.deregister_renderer = renderers.core.deregister_renderer
+
+        self.do_startup_(**kwargs)
         _logger.debug("initializing kernel instance %s: done" % self)
 
     def do_startup_ (self, **kwargs):
@@ -73,9 +81,7 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
     def do_shutdown (self, restart = False):
         verb = "restarting" if (restart) else "shutting down"
         _logger.debug("%s kernel instance %s" % (verb, self))
-
         self.do_shutdown_(restart)
-
         _logger.debug("%s kernel instance %s: done" % (verb, self))
 
     def do_shutdown_ (self, will_restart = False):
@@ -84,114 +90,112 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
     def do_execute (self, code, silent,
         store_history, user_expressions, allow_stdin):
         try:
-            pre_flight_commands, post_flight_commands, code = \
-                self.magic_commands.parse_code(code)
+            # extract pre/post flight commands, if any
+            pre_flight_commands, post_flight_commands, user_code = \
+                self.magic_commands._parse_code(code)
 
-            if (code.strip() == '') and \
+            # if there is no user code nor pre/post flight commands, do nothing
+            if (user_code.strip() == '') and \
                (len(pre_flight_commands) == 0) and \
                (len(post_flight_commands) == 0):
                 return
 
-            # execute pre-flight magic commands, if any
-            for (name, command) in pre_flight_commands:
-                _logger.debug(
-                    "executing pre-flight command wrapper for '%s'" % name)
-                _logger.debug(str(command))
+            # (1/4) execute pre-flight magic commands, if any
+            for (mc_name, mc_function) in pre_flight_commands:
                 try:
-                    output = command(code)
-                except Exception:
-                    exc_type, exc_value, exc_traceback = sys.exc_info()
-                    msg = "Error in pre-flight command '%s':\n%s: %s" % (
-                        name, exc_type.__name__, exc_value)
-                    raise PreFlightCommandException(msg), None, exc_traceback
+                    # input: string; output: string (or None)
+                    mc_output = mc_function(user_code)
 
-                if (output is not None):
-                    assert utils.is_string(output), \
-                        "Invalid return value for pre-flight " + \
-                        "magic command '%s': must be a string" % name
-                    code = output
+                except Exception as exception:
+                    future.utils.raise_with_traceback(Exception(
+                        "Error while running pre-flight command '%s': "
+                        "%s" % (mc_name, exception)))
 
-            if (code.strip() == ''):
-                results = None
+                # output, if any, becomes the new user code
+                if (mc_output is not None):
+                    assert utils.is_string(mc_output), (
+                        "Invalid return value for pre-flight "
+                        "magic command '%s': Must be a string" % mc_name)
+                    user_code = mc_output
+
+            # (2/4) pass the user code to the kernel and retrieve frames
+            if (user_code.strip() == ''):
+                result_frames = []
             else:
-                _logger.debug("executing:\n%s" % code)
                 try:
-                    results = self.do_execute_(code)
-                    if (results is not None):
-                        # ensure that the results are a list
-                        if (utils.is_iterable(results)):
-                            results = list(results)
-                        else:
-                            results = [results]
+                    _logger.debug("executing:\n%s" % user_code)
+                    # input: string; output: generator
+                    result_frames = self.do_execute_(user_code)
+                    result_frames = renderers.core._check_frames(result_frames)
+                    _logger.debug("executing: done")
 
-                except Exception:
-                    exc_type, exc_value, exc_traceback = sys.exc_info()
-                    msg = "Error while evaluating user command:\n%s: %s" % (exc_type.__name__, exc_value)
-                    raise ExecutionException(msg), None, exc_traceback
+                except Exception as exception:
+                    future.utils.raise_with_traceback(Exception(
+                        "Error while evaluating user code: %s" % exception))
 
-            # execute post-flight magic commands, if any
-            for (name, command) in post_flight_commands:
-                _logger.debug(
-                    "executing post-flight command wrapper for '%s'" % name)
+            # (3/4) execute post-flight magic commands, if any
+            for (mc_name, mc_function) in post_flight_commands:
                 try:
-                    output = command(code, results)
-                except Exception:
-                    exc_type, exc_value, exc_traceback = sys.exc_info()
-                    msg = "Error in post-flight command '%s':\n%s: %s" % (
-                        name, exc_type.__name__, exc_value)
-                    raise PostFlightCommandException(msg), None, exc_traceback
+                    # input: generator; output: generator
+                    mc_output = mc_function(user_code, result_frames)
+                    mc_output = renderers.core._check_frames(mc_output)
 
-                if (output is not None):
-                    assert utils.is_iterable(output), \
-                        "Invalid return value for post-flight " + \
-                        "magic command '%s': must be an iterable" % name
-                    results = output
+                except Exception as exception:
+                    future.utils.raise_with_traceback(Exception(
+                        "Error while running post-flight command '%s': "
+                        "%s" % (mc_name, exception)))
 
-            _logger.debug("executing: done")
+                # output becomes the new result frame(s)
+                result_frames = mc_output
 
-            # display the execution results, if wanted
+            # (4/4) render the kernel results and send them to the notebook
             if (silent):
                 _logger.debug("emitting nothing (silent notebook)")
+            else:
+                n_frames, n_subframes = 0, 0
+                for (mime_type, content, metadata) in result_frames:
+                    # feed the content to any compatible renderer and
+                    # send the resulting sub-frame(s) to the notebook
+                    try:
+                        subframes = renderers.core._render_content(
+                            mime_type, content, metadata)
 
-            elif (results is not None):
-                for result in results:
-                    if (type(result) in (list, tuple)):
-                        content_type, content = result[0], result[1:]
-                        if (len(content) == 1):
-                            content = content[0]
-                    else:
-                        content_type, content = None, result
+                    except Exception as exception:
+                        future.utils.raise_with_traceback(Exception(exception))
 
-                    # execution result is something that can be printed
-                    if (content_type is None):
-                        _logger.debug("emitting text (%d characters)" % \
-                            len(content))
+                    for (mime_type_, content_, metadata_) in subframes:
+                        length_ = len(content_)
+                        metadata_ = {} if (metadata_ is None) else metadata_
 
-                        self.send_response(self.iopub_socket,
-                            "stream", {
+                        if (mime_type_ == "text/plain"):
+                            _logger.debug("emitting text"
+                                " (%d %s)" % (
+                                    len(content_),
+                                    utils.plural("character", length_)))
+
+                            response = ("stream", {
                                 "name": "stdout",
-                                "text": unicode(content)})
+                                "text": unicode(content_)})
+                        else:
+                            _logger.debug("emitting data"
+                                " (%s, %d %s, metadata = %s)" % (
+                                    mime_type_,
+                                    len(content_),
+                                    utils.plural("byte", length_),
+                                    metadata_))
 
-                    # execution result is raw data with a given content type
-                    else:
-                        # process this content type through IPython.display
-                        # and other modules, if a processor is available
-                        content_type, content, metadata = \
-                            mimetype._format_content(content_type, content)
+                            response = ("display_data", {
+                                "metadata": metadata_,
+                                "data": {mime_type_: content_}})
 
-                        _logger.debug(
-                            "emitting data (%s, %d bytes, metadata = %s)" % (
-                                content_type, len(content), metadata))
+                        self.send_response(self.iopub_socket, *response)
+                        n_subframes += 1
 
-                        _logger.debug(content)
+                    n_frames += 1
 
-                        if (metadata is None):
-                            metadata = {}
-
-                        self.send_response(self.iopub_socket,
-                            "display_data", {
-                                "metadata": metadata,
-                                "data": {content_type: content}})
+                _logger.debug("emitted %d %s from %d %s" % (
+                    n_subframes, utils.plural("subframe", n_subframes),
+                    n_frames, utils.plural("frame", n_frames)))
 
         except KeyboardInterrupt:
             msg = "Execution aborted by user"
@@ -205,10 +209,17 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
                 "execution_count": self.execution_count}
 
         except Exception as exception:
+            # retrieve the exception message (last line of traceback)
             exc_type, exc_value, exc_traceback = sys.exc_info()
 
             msg = traceback.format_exception_only(
                 exc_type, exc_value)[0].strip()
+
+            # if the exception is of type Exception, we strip the type
+            if (msg.startswith("Exception: ")):
+                msg = msg[11:]
+
+            # if the exception has no message attached, says so explicitly
             if (str(exc_value).strip() == ''):
                 msg += "(no message)"
 
@@ -239,24 +250,63 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
             "user_expressions": {}}
 
     def do_execute_ (self, code):
-        return
+        yield
 
-#:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+    @classmethod
+    def launch (cls, debug = False):
+        """ Launch an instance of this kernel (blocking operation)
 
-def _validate_kernel (kernel_class):
-    if (not issubclass(kernel_class, BaseKernel)) or \
-       (kernel_class == BaseKernel):
-        raise ValueError(
-            "Invalid value for kernel_class (must be a subclass of BaseKernel)")
+            Note that this is a blocking operation; no more than one
+            kernel instance can be launched from the same thread.
+        """
+        logging.config.dictConfig({
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {"default": {
+                "format": "[%(asctime)s] %(levelname)s: %(message)s"
+                }},
+            "handlers": {"default": {
+                "class": "logging.StreamHandler",
+                "formatter": "default",
+                }},
+            "loggers": {"": {
+                "handlers": ["default"],
+                "level": logging.DEBUG if (debug) else logging.INFO,
+                "propagate": True
+                }}
+            })
 
-def launch_kernel (kernel_class, debug = False):
-    _validate_kernel(kernel_class)
+        _logger.debug("starting kernel application using %s" % cls)
+        ipykernel.kernelapp.IPKernelApp.launch_instance(kernel_class = cls)
+        _logger.debug("stopping kernel application using %s" % cls)
 
-    if (debug):
-        logging.basicConfig(
-            format = "[%(asctime)s] %(levelname)s: %(message)s",
-            level = logging.DEBUG)
+    @classmethod
+    def install (cls, all_users = False, prefix = None):
+        """ Install this kernel
+        """
+        # create the kernel specifications file
+        kspec = {
+            "argv": [
+                "python",
+                "-m", inspect.getmodule(cls).__name__,
+                "-f", "{connection_file}"],
+            "display_name": cls.implementation_name,
+            "language": cls.language_name}
 
-    _logger.debug("launching kernel application using %s" % kernel_class)
-    ipykernel.kernelapp.IPKernelApp.launch_instance(kernel_class = kernel_class)
-    _logger.debug("stopping kernel application using %s" % kernel_class)
+        _logger.debug("kernel specifications: %s" % kspec)
+
+        kspec_path = tempfile.mkdtemp()
+        kspec_fn = os.path.join(kspec_path, "kernel.json")
+
+        json.dump(kspec, open(kspec_fn, "w"),
+            indent = 4, sort_keys = True, separators = (',', ': '))
+
+        # install the kernel specifications file
+        kspec_manager = jupyter_client.kernelspec.KernelSpecManager()
+        kspec_manager.install_kernel_spec(
+            kspec_path,
+            kernel_name = cls.implementation_name,
+            user = not all_users,
+            prefix = prefix)
+
+        shutil.rmtree(kspec_path)

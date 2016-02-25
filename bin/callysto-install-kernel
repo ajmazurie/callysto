@@ -39,66 +39,37 @@ try:
 except ImportError:
     error("invalid qualified name: module '%s' not found" % module_name)
 
+def walk_classes (module):
+    objects = inspect.getmembers(module, inspect.ismodule)
+    while (len(objects) > 0):
+        _, obj = objects.pop(0)
+        if (inspect.isclass(obj)):
+            yield obj
+        else:
+            objects.extend(inspect.getmembers(obj, inspect.isclass))
+
 if (class_name is not None):
     try:
         kernel_class = getattr(kernel_module, class_name)
     except AttributeError:
         error("invalid qualified name: class '%s' not found" % class_name)
 
-    try:
-        callysto.kernel._validate_kernel(kernel_class)
-    except ValueError:
-        error("invalid class: %s is not a subclass of callysto.BaseKernel" % kernel_class)
+    if (not issubclass(kernel_class, callysto.BaseKernel)):
+        error(
+            "invalid class: '%s' is not a subclass "
+            "of callysto.BaseKernel" % kernel_class)
 
 else:
-    candidates, kernel_class = inspect.getmembers(kernel_module), None
-
-    while (len(candidates) > 0):
-        _, candidate = candidates.pop(0)
-
-        if (inspect.ismodule(candidate)):
-            candidates.extend(inspect.getmembers(candidate))
-            continue
-
-        if (not inspect.isclass(candidate)):
-            continue
-
-        try:
-            callysto.kernel._validate_kernel(candidate)
+    kernel_class = None
+    for candidate in walk_classes(kernel_module):
+        if (issubclass(candidate, callysto.BaseKernel)):
             kernel_class = candidate
             break
 
-        except AttributeError:
-            continue
-
     if (kernel_class is None):
-        error("invalid module '%s': no class subclassing callysto.BaseKernel found" % module_name)
+        error(
+            "invalid module '%s': no class subclassing "
+            "callysto.BaseKernel found" % module_name)
 
-kernel_module = inspect.getmodule(kernel_class)
-
-#:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-kernel_spec_manager = jupyter_client.kernelspec.KernelSpecManager()
-
-# create the kernel specifications
-kernel_spec = {
-    "argv": [
-        "python",
-        "-m", kernel_module.__name__,
-        "-f", "{connection_file}"],
-    "display_name": kernel_class.implementation_name,
-    "language": kernel_class.language_name}
-
-kspec_path = tempfile.mkdtemp()
-kspec_fn = os.path.join(kspec_path, "kernel.json")
-
-json.dump(kernel_spec, open(kspec_fn, "w"),
-    indent = 4, sort_keys = True, separators = (',', ': '))
-
-# install the kernel specifications
-kernel_spec_manager.install_kernel_spec(
-    kspec_path,
-    kernel_name = kernel_class.implementation_name,
-    user = options.user_only)
-
-shutil.rmtree(kspec_path)
+kernel_class.install(all_users = not options.user_only)
+print("Installed kernel: %s" % kernel_class)

@@ -7,10 +7,7 @@ import docopt
 
 import utils
 
-_logger = logging.getLogger(__file__)
-
-class MagicCommandException (Exception):
-    pass
+_logger = logging.getLogger(__name__)
 
 class MagicCommandsManager:
     def __init__ (self):
@@ -19,7 +16,7 @@ class MagicCommandsManager:
 
     def set_prefix (self, prefix):
         if (not utils.is_string(prefix)) or (len(prefix) != 1):
-            raise ValueError("invalid value for prefix: must be a character")
+            raise ValueError("Invalid value for prefix: must be a character")
         self._magic_commands_prefix = prefix
 
     def get_prefix (self):
@@ -29,43 +26,64 @@ class MagicCommandsManager:
 
     def _declare_command (self,
         name, callback_function, doc, overwrite, is_pre_flight):
+
         if (not utils.is_string(name)):
             raise ValueError(
-                "invalid value for name: must be a string")
+                "Invalid value for magic command name: "
+                "Must be a string")
+
         if (not utils.is_callable(callback_function)):
             raise ValueError(
-                "invalid value for callback_function: must be a callable")
+                "Invalid value for magic command callback function: "
+                "Must be a callable")
 
         if (doc is None):
             doc = callback_function.__doc__
 
         if (self.has_command(name) and (not overwrite)):
-            raise Exception("magic command '%s' already defined" % name)
+            raise Exception(
+                "Invalid value for magic command name: "
+                "Name '%s' already taken" % name)
 
-        def _wrapper (args, *inputs):
+        def _wrapper (doc, mc_args, *args_from_kernel):
             if (doc is None):
                 kwargs = {}
             else:
-                kwargs = docopt.docopt(doc, args, help = True)
-                # note: we explicitly remove keys without values
-                for key, value in kwargs.items():
+                # we parse the arguments using docopt
+                try:
+                    if (mc_args is None):
+                        mc_args = ''
+                    kwargs = docopt.docopt(doc, mc_args, help = True)
+
+                except docopt.DocoptExit as exception:
+                    usage = ' '.join(map(
+                        lambda x: x.strip(), str(exception).splitlines()))
+                    raise Exception("Invalid syntax, %s" % usage)
+
+                # we explicitly remove keys without values
+                for (key, value) in kwargs.items():
                     if (value is None):
                         del kwargs[key]
                     else:
-                        kwargs[key] = value.strip().strip('"').strip("'")
+                        # remove any surrounding quotes
+                        # and whitespaces from the value
+                        kwargs[key] = re.sub(r"^['\"\s]|['\"\s]$", '', value)
 
             _logger.debug(
-                "executing %s-flight command '%s' (callback function: %s)" % (
+                "executing %s-flight command '%s' "
+                "(callback function: %s)" % (
                     "pre" if is_pre_flight else "post",
                     name.lower(), callback_function))
 
-            return callback_function(*inputs, **kwargs)
+            return callback_function(*args_from_kernel, **kwargs)
 
-        self._magic_commands[name.lower()] = (_wrapper, is_pre_flight)
+        self._magic_commands[name.lower()] = (
+            functools.partial(_wrapper, doc), is_pre_flight)
 
-        _logger.debug("added %s-flight command '%s' (callback function: %s)" % (
-            "pre" if is_pre_flight else "post",
-            name.lower(), callback_function))
+        _logger.debug(
+            "added %s-flight command '%s' (callback function: %s)" % (
+                "pre" if is_pre_flight else "post",
+                name.lower(), callback_function))
 
     def declare_pre_flight_command (self,
         name, callback_function, doc = None, overwrite = False):
@@ -90,31 +108,31 @@ class MagicCommandsManager:
 
     def remove_command (self, name):
         if (not self.has_command(name)):
-            raise ValueError("magic command not found: %s" % name)
+            raise ValueError("Unknown magic command: %s" % name)
         del self._magic_commands[name.lower()]
 
-    def parse_code (self, code):
+    def _parse_code (self, code):
         # detect magic commands, removing them from the input code
         pre_flight_commands, post_flight_commands, code_ = [], [], []
+
         for line in code.splitlines():
             if (line.strip().startswith(self.prefix)):
                 line = line.strip()[1:]
 
-                argv = line.split(' ', 1)
-                name, args = argv[0], None if (len(argv) == 1) else argv[1]
-                if (not self.has_command(name)):
-                    raise MagicCommandException(
-                        "unknown magic command: %s" % name)
+                mc_argv = line.split(' ', 1)
+                mc_args = None if (len(mc_argv) == 1) else mc_argv[1]
 
-                command, is_pre_flight = self._magic_commands[name.lower()]
+                mc_name = mc_argv[0]
+                if (not self.has_command(mc_name)):
+                    raise Exception("Unknown magic command: %s" % mc_name)
 
+                mc, is_pre_flight = self._magic_commands[mc_name.lower()]
                 if (is_pre_flight):
-                    pre_flight_commands.append((name,
-                        functools.partial(command, args)))#lambda code: command(args, code)))
-                    _logger.debug("%s %s" % (command, pre_flight_commands[-1]))
+                    commands = pre_flight_commands
                 else:
-                    post_flight_commands.append((name,
-                        functools.partial(command, args)))#lambda code, results: command(args, code, results)))
+                    commands = post_flight_commands
+
+                commands.append((mc_name, functools.partial(mc, mc_args)))
             else:
                 code_.append(line)
 

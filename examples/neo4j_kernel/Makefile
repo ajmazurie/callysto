@@ -6,7 +6,7 @@ BOLD := \033[1m
 DIM := \033[2m
 RESET := \033[0m
 
-all: test clean
+all: uninstall install clean
 
 uninstall:
 	@echo -e "$(BOLD)uninstalling '$(PROJECT_NAME)'$(RESET)"
@@ -16,18 +16,12 @@ install:
 	@echo -e "$(BOLD)installing '$(PROJECT_NAME)'$(RESET)"
 	@echo -e -n "$(DIM)"
 	@python setup.py install
+	@callysto-install-kernel $(PROJECT_NAME)
 	@echo -e -n "$(RESET)"
-
-test: uninstall install
-	@echo -e "$(BOLD)running test units for '$(PROJECT_NAME)'$(RESET)"
-	@python -m unittest discover \
-		-s tests -p 'tests_*.py' \
-		--verbose
-	@rm -rf tests/*.pyc
 
 dist:
 	@echo -e "$(BOLD)packaging '$(PROJECT_NAME)'$(RESET)"
-	@python setup.py sdist --formats=zip --dist-dir=.
+	@python setup.py sdist --formats=zip
 
 clean:
 	@echo -e "$(BOLD)cleaning '$(PROJECT_NAME)' repository$(RESET)"

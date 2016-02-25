@@ -12,7 +12,7 @@ import sqlparse
 
 import callysto
 
-_logger = logging.getLogger(__file__)
+_logger = logging.getLogger(__name__)
 
 class SqlKernel (callysto.BaseKernel):
     implementation_name = "SQL Kernel"
@@ -32,20 +32,21 @@ class SqlKernel (callysto.BaseKernel):
     def do_execute_ (self, code):
         try:
             statements = sqlparse.split(code)
-            yield "%d %s received\n" % (
-                len(statements),
-                callysto.utils.plural("statement", len(statements)))
+            n_statements = len(statements)
 
-            for i, statement in enumerate(statements):
+            for (statement_n, statement) in enumerate(statements):
+                if (n_statements > 1):
+                    prefix = "statement %d of %d: " % (
+                        statement_n+1, n_statements)
+                else:
+                    prefix = ''
+
                 statement = sqlparse.format(
                     statement,
                     identifier_case = "lower",
                     keyword_case = "upper",
                     reindent = True,
                     strip_comments = True)
-
-                _logger.debug("received SQL statement %d/%d:\n%s" % (
-                    i+1, len(statements), statement))
 
                 # execute the statement
                 cursor = self._database.cursor()
@@ -54,18 +55,14 @@ class SqlKernel (callysto.BaseKernel):
                 # commit any change
                 self._database.commit()
 
-                if (len(statements) == 1):
-                    msg = ['']
-                else:
-                    msg = ["statement %d (%s): " % (
-                        i+1, statement.split()[0])]
+                status_message = ""
 
                 # if the database says rows have been affected,
                 # we forward this information to the user
                 if (cursor.rowcount > 0):
-                    msg.append("%d %s affected" % (
+                    status_message = "%d %s affected; " % (
                         cursor.rowcount,
-                        callysto.utils.plural("row", cursor.rowcount)))
+                        callysto.utils.plural("row", cursor.rowcount))
 
                 # if the database returns a result set,
                 # we show it as a CSV table with header
@@ -76,20 +73,22 @@ class SqlKernel (callysto.BaseKernel):
                         table.append(row)
 
                     nrows = len(table) - 1
-                    msg.append("%d %s returned" % (
-                        nrows, callysto.utils.plural("row", nrows)))
+                    status_message += "%d %s returned" % (
+                        nrows, callysto.utils.plural("row", nrows))
 
-                    yield (callysto.CONTENT.CSV_WITH_HEADER, table)
+                    yield (callysto.MIME_TYPE.CSV_WITH_HEADER, table)
 
                 else:
-                    msg.append("no rows returned")
+                    status_message += "no rows returned"
 
-                msg = msg[0] + '; '.join(msg[1:]) + '\n'
-                yield msg
+                if (0 < statement_n < n_statements):
+                    yield '\n'
+
+                yield prefix + status_message
 
         except Exception as exception:
             self._database.rollback()
             raise exception
 
 if (__name__ == "__main__"):
-    callysto.launch_kernel(SqlKernel)
+    SqlKernel.launch(debug = True)
