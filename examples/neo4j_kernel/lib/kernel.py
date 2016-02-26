@@ -1,5 +1,7 @@
-# Example Neo4j kernel, mimicking a CYPHER terminal
-# and connected to a Neo4j database instance
+"""
+Example Neo4j kernel, mimicking a CYPHER terminal
+and connected to a Neo4j database instance
+"""
 
 __all__ = (
     "Neo4jKernel",)
@@ -16,7 +18,7 @@ import callysto.renderers.graphviz
 
 _logger = logging.getLogger(__name__)
 
-renderer = callysto.renderers.graphviz.GraphvizGraphRenderer()
+renderer = callysto.renderers.graphviz.GraphvizRenderer()
 
 class Neo4jKernel (callysto.BaseKernel):
     implementation_name = "Neo4j Kernel"

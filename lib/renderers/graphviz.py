@@ -1,7 +1,11 @@
-# graph renderer based on Graphviz; see http://www.graphviz.org/
+"""
+Network renderer based on Graphviz; see http://www.graphviz.org/
+
+TODO: add support for GraphML content type application/graphml+xml
+"""
 
 __all__ = (
-    "GraphvizGraphRenderer",)
+    "GraphvizRenderer",)
 
 import logging
 
@@ -14,8 +18,9 @@ from base import BaseRenderer
 
 _logger = logging.getLogger(__name__)
 
-class GraphvizGraphRenderer (BaseRenderer):
-    MIME_TYPES = ("text/vnd.graphviz",)
+class GraphvizRenderer (BaseRenderer):
+    MIME_TYPES = (
+        "text/vnd.graphviz",)
 
     SUPPORTED_PROGRAMS = ("dot", "neato", "twopi", "circo", "fdp", "sfdp")
     SUPPORTED_FORMATS = ("gif", "png", "svg")
@@ -33,7 +38,7 @@ class GraphvizGraphRenderer (BaseRenderer):
 
             Options:
                 <NAME>  One of the supported programs (see
-                        GraphvizGraphRenderer.SUPPORTED_PROGRAMS)
+                        GraphvizRenderer.SUPPORTED_PROGRAMS)
         """
         layout_program = kwargs["<NAME>"].lower()
         if (not layout_program in self.SUPPORTED_PROGRAMS):
@@ -48,7 +53,7 @@ class GraphvizGraphRenderer (BaseRenderer):
 
             Options:
                 <NAME>  One of the supported formats (see
-                        GraphvizGraphRenderer.SUPPORTED_FORMATS)
+                        GraphvizRenderer.SUPPORTED_FORMATS)
         """
         output_format = kwargs["<NAME>"].lower()
         if (not output_format in self.SUPPORTED_FORMATS):
