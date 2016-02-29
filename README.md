@@ -4,7 +4,7 @@
 
 **Callysto** comes with built-in renderers for basic MIME types (text, PNG, GIF, JPG, SVG, HTML and Javascript documents). Additional renderers can be developed by extending the `BaseRenderer` class. For example, a [Graphviz](http://www.graphviz.org/)-based graph renderer is provided to display networks.
 
-Example kernels are provided to create unix ([BASH](https://en.wikipedia.org/wiki/Bash_%28Unix_shell%29)), SQL ([SQLite](https://www.sqlite.org/)), and [Neo4j](http://neo4j.com/) interactive shell with more to come.
+Example kernels developed with **Callysto** are provided as a [separate repository](https://github.com/ajmazurie/callysto-examples).
 
 ## Quick examples
 

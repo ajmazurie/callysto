@@ -36,3 +36,8 @@ clean:
 	@rm -rf **/$(PROJECT_NAME).egg-info
 	@rm -rf $(PROJECT_NAME).egg-info
 	@rm -rf .eggs
+
+publish:
+	@echo -e "$(BOLD)publishing '$(PROJECT_NAME)' on pypi$(RESET)"
+	-@python setup.py sdist upload
+	@$(MAKE) clean
