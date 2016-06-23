@@ -260,7 +260,7 @@ def default_image_renderer (content, mime_type, **metadata):
         try:
             float(metadata[key])
         except:
-            raise Exception("Invalid value for metadata field %s: %s" % (
+            raise Exception("Invalid value for metadata field '%s': %s" % (
                 key, metadata[key]))
 
     yield (mime_type, base64.b64encode(content), metadata)
@@ -286,14 +286,37 @@ register_renderer(default_svg_renderer, MIME_TYPE.SVG)
 
 # JavaScript code renderer
 def default_javascript_renderer (content, mime_type, **metadata):
-    _ensure_no_metadata(metadata)
+    for key in metadata:
+        if (key != "modules"):
+            raise Exception("Unknown metadata field: %s" % key)
 
-    code = \
-        "<script type=\"%s\">\n" % MIME_TYPE[mime_type] + \
-        textwrap.dedent(content).strip() + \
-        "\n</script>"
+    modules = metadata.get(key, [])
+    if (not isinstance(modules, dict)):
+        raise Exception(
+            "Invalid value for metadata field 'modules': %s" % modules)
 
-    yield (MIME_TYPE.HTML, code)
+    wrapper = "<script type=\"application/javascript\">\n%s\n</script>"
+    code = textwrap.dedent(content).strip()
+
+    if (len(modules) > 0):
+        paths = [{"prefix": k, "path": v} for (k, v) in modules.iteritems()]
+
+        module_prefixes = "\"%s"
+
+        wrapper = wrapper % """\
+            require.config({
+                paths: {
+                    %(paths)s
+                },
+                shim: {%(dependencies)s}
+            });
+
+            require([%(module_quoted_prefixes)s], function(%(module_prefixes)s) {
+                %%s
+            });
+            """
+
+    yield (MIME_TYPE.HTML, wrapper % code)
     yield None
 
 register_renderer(default_javascript_renderer, MIME_TYPE.JAVASCRIPT)

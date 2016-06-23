@@ -3,9 +3,12 @@
 import glob
 import setuptools
 
+__NAME__ = "callysto"
+__VERSION__ = "0.2.1"
+
 setuptools.setup(
-    name = "callysto",
-    version = "0.2",
+    name = __NAME__,
+    version = __VERSION__,
     description = (
         "Framework to create domain-specific "
         "kernels for the Jupyter platform"),
@@ -20,21 +23,25 @@ setuptools.setup(
     package_dir = {
         "callysto": "lib"},
     scripts = glob.glob("bin/*"),
+
+    # package requirements
     install_requires = [
         "docopt",
         "enum34",
         "future",
         "html",
         "inflect",
-        "ipykernel",
-        "ipywidgets",
-        "jupyter_client",
-        "jupyter_core",
+        "entrypoints",
+        "jupyter",
+        "pydotplus",
         "six"],
 
     # package metadata
-    url = "https://github.com/ajmazurie/callysto",
-    download_url = "https://github.com/ajmazurie/callysto/archive/0.2.zip",
+    url = "https://github.com/ajmazurie/" + __NAME__,
+    download_url = (
+        "https://github.com/ajmazurie/"
+        "%s/archive/%s.zip" % (__NAME__, __VERSION__)),
+
     classifiers = [
         "Development Status :: 4 - Beta",
         "Environment :: Web Environment",

@@ -1,7 +1,5 @@
 """
 Network renderer based on Graphviz; see http://www.graphviz.org/
-
-TODO: add support for GraphML content type application/graphml+xml
 """
 
 __all__ = (
@@ -13,12 +11,12 @@ import pydotplus
 import pygraphviz
 import six
 
-import core
-from base import BaseRenderer
+import core.MIME_TYPE
+import base.BaseRenderer
 
 _logger = logging.getLogger(__name__)
 
-class GraphvizRenderer (BaseRenderer):
+class GraphvizRenderer (base.BaseRenderer):
     MIME_TYPES = (
         "text/vnd.graphviz",)
 
