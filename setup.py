@@ -31,9 +31,9 @@ setuptools.setup(
         "future",
         "html",
         "inflect",
-        "entrypoints",
         "jupyter",
         "pydotplus",
+        "pygraphviz",
         "six"],
 
     # package metadata

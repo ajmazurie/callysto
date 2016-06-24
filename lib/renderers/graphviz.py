@@ -32,13 +32,12 @@ class GraphvizRenderer (base.BaseRenderer):
         self.reset_edge_properties(None)
 
     def set_layout_program (self, code, **kwargs):
-        """ Usage: set-layout-program <NAME>
+        """ usage: set-layout-program <name>
 
-            Options:
-                <NAME>  One of the supported programs (see
-                        GraphvizRenderer.SUPPORTED_PROGRAMS)
+            <name>  One of the supported programs (see
+                    GraphvizRenderer.SUPPORTED_PROGRAMS)
         """
-        layout_program = kwargs["<NAME>"].lower()
+        layout_program = kwargs["<name>"].lower()
         if (not layout_program in self.SUPPORTED_PROGRAMS):
             raise Exception(
                 "Unknown program: %s" % layout_program)
@@ -47,13 +46,12 @@ class GraphvizRenderer (base.BaseRenderer):
         _logger.debug("set graphviz layout program to '%s'" % layout_program)
 
     def set_output_format (self, code, **kwargs):
-        """ Usage: set-output-format <NAME>
+        """ usage: set-output-format <name>
 
-            Options:
-                <NAME>  One of the supported formats (see
-                        GraphvizRenderer.SUPPORTED_FORMATS)
+            <name>  One of the supported formats (see
+                    GraphvizRenderer.SUPPORTED_FORMATS)
         """
-        output_format = kwargs["<NAME>"].lower()
+        output_format = kwargs["<name>"].lower()
         if (not output_format in self.SUPPORTED_FORMATS):
             raise Exception(
                 "Unknown or unsupported format: %s" % output_format)
@@ -67,14 +65,13 @@ class GraphvizRenderer (base.BaseRenderer):
         self._graph_properties = {}
 
     def set_graph_property (self, code, **kwargs):
-        """ Usage: set-graph-property <NAME> <VALUE>
+        """ usage: set-graph-property <name> <value>
 
-            Options:
-                <NAME>   Name of a graph property supported by Graphviz
-                <VALUE>  Value for this graph property
+            <name>   Name of a graph property supported by Graphviz
+            <value>  Value for this graph property
         """
-        property_name = kwargs["<NAME>"]
-        property_value = kwargs["<VALUE>"]
+        property_name = kwargs["<name>"]
+        property_value = kwargs["<value>"]
 
         if (not property_name in pydotplus.GRAPH_ATTRIBUTES):
             raise Exception("Unknown graph property: %s" % property_name)
@@ -82,19 +79,18 @@ class GraphvizRenderer (base.BaseRenderer):
         self._graph_properties[property_name] = property_value
 
     def reset_node_properties (self, code, **kwargs):
-        """ Usage: reset-node-properties
+        """ usage: reset-node-properties
         """
         self._node_properties = {}
 
     def set_node_property (self, code, **kwargs):
-        """ Usage: set-node-property <NAME> <VALUE>
+        """ usage: set-node-property <name> <value>
 
-            Options:
-                <NAME>   Name of a node property supported by Graphviz
-                <VALUE>  Value for this node property
+            <name>   Name of a node property supported by Graphviz
+            <value>  Value for this node property
         """
-        property_name = kwargs["<NAME>"]
-        property_value = kwargs["<VALUE>"]
+        property_name = kwargs["<name>"]
+        property_value = kwargs["<value>"]
 
         if (not property_name in pydotplus.NODE_ATTRIBUTES):
             raise Exception("Unknown node property: %s" % property_name)
@@ -102,19 +98,18 @@ class GraphvizRenderer (base.BaseRenderer):
         self._node_properties[property_name] = property_value
 
     def reset_edge_properties (self, code, **kwargs):
-        """ Usage: reset-edge-properties
+        """ usage: reset-edge-properties
         """
         self._edge_properties = {}
 
     def set_edge_property (self, code, **kwargs):
-        """ Usage: set-edge-property <NAME> <VALUE>
+        """ usage: set-edge-property <name> <value>
 
-            Options:
-                <NAME>   Name of an edge property supported by Graphviz
-                <VALUE>  Value for this edge property
+            <name>   Name of an edge property supported by Graphviz
+            <value>  Value for this edge property
         """
-        property_name = kwargs["<NAME>"]
-        property_value = kwargs["<VALUE>"]
+        property_name = kwargs["<name>"]
+        property_value = kwargs["<value>"]
 
         if (not property_name in pydotplus.EDGE_ATTRIBUTES):
             raise Exception("Unknown edge property: %s" % property_name)

@@ -14,7 +14,7 @@ all: test clean
 install:
 	@echo -e "$(BOLD)installing $(PROJECT_NAME) $(PROJECT_VERSION)$(RESET)"
 	@echo -e -n "$(DIM)"
-	@python setup.py install
+	@pip install .
 	@echo -e -n "$(RESET)"
 
 .PHONY: uninstall
