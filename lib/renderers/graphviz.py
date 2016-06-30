@@ -11,12 +11,12 @@ import pydotplus
 import pygraphviz
 import six
 
-import core.MIME_TYPE
-import base.BaseRenderer
+from .base import BaseRenderer
+from .core import MIME_TYPE
 
 _logger = logging.getLogger(__name__)
 
-class GraphvizRenderer (base.BaseRenderer):
+class GraphvizRenderer (BaseRenderer):
     MIME_TYPES = (
         "text/vnd.graphviz",)
 
@@ -139,9 +139,9 @@ class GraphvizRenderer (base.BaseRenderer):
         # generate a picture out of the DOT document
         try:
             content_type = {
-                "gif": core.MIME_TYPE.GIF,
-                "png": core.MIME_TYPE.PNG,
-                "svg": core.MIME_TYPE.SVG,
+                "gif": MIME_TYPE.GIF,
+                "png": MIME_TYPE.PNG,
+                "svg": MIME_TYPE.SVG,
             }[self._output_format]
 
             content = six.BytesIO()

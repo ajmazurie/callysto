@@ -36,8 +36,11 @@ else:
 
 try:
     kernel_module = importlib.import_module(module_name)
-except ImportError:
-    error("invalid qualified name: module '%s' not found" % module_name)
+except ImportError as exception:
+    if (str(exception).endswith(module_name)):
+        error("invalid qualified name: module '%s' not found" % module_name)
+    else:
+        error("error while importing '%s': %s" % (module_name, exception))
 
 def walk_classes (module):
     objects = inspect.getmembers(module, inspect.ismodule)

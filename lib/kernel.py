@@ -6,17 +6,14 @@ import inspect
 import json
 import logging
 import logging.config
-import os
 import shutil
-import sys
+import sys, os
 import tempfile
 import traceback
 
-import docopt
 import future.utils
 import ipykernel.kernelapp
 import ipykernel.kernelbase
-import ipywidgets
 import jupyter_client.kernelspec
 
 import magics
@@ -253,28 +250,33 @@ class BaseKernel (ipykernel.kernelbase.Kernel):
         yield
 
     @classmethod
-    def launch (cls, debug = False):
-        """ Launch an instance of this kernel (blocking operation)
+    def launch (cls, debug = None):
+        """ Launch a singleton instance of this kernel
 
             Note that this is a blocking operation; no more than one
             kernel instance can be launched from the same thread.
         """
+        if (debug is None):
+            debug = str(os.getenv("CALLYSTO_DEBUG", ""))
+            debug = (debug.lower() in ("1", "true", "yes"))
+
         logging.config.dictConfig({
             "version": 1,
             "disable_existing_loggers": False,
-            "formatters": {"default": {
-                "format": "[%(asctime)s] %(levelname)s: %(message)s"
-                }},
-            "handlers": {"default": {
-                "class": "logging.StreamHandler",
-                "formatter": "default",
-                }},
+            "formatters": {
+                "custom_formatter": {
+                    "format": "[%(asctime)s] %(levelname)s: %(message)s"}},
+            "handlers": {
+                "custom_handler": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "custom_formatter"}},
             "loggers": {"": {
-                "handlers": ["default"],
+                "handlers": ["custom_handler"],
                 "level": logging.DEBUG if (debug) else logging.INFO,
-                "propagate": True
-                }}
-            })
+                "propagate": True}}})
+
+        if (debug):
+            _logger.info("running in debug mode")
 
         _logger.debug("starting kernel application using %s" % cls)
         ipykernel.kernelapp.IPKernelApp.launch_instance(kernel_class = cls)
